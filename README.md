@@ -90,9 +90,9 @@ This ensures easy readability and persistence across program executions.
 
 ## Team Responsibilities
 
-* Member 1: Transaction management, dynamic memory allocation, and STL usage
-* Member 2: File handling and command-line interface
-* Member 3: Report generation, polymorphism, and performance optimization
+* Sneha Malhotra: Transaction management, dynamic memory allocation, and STL usage
+* Ishita Pandey: File handling and command-line interface
+* Bhavya Sri Kurapati: Report generation, polymorphism, and performance optimization
 
 ---
 
