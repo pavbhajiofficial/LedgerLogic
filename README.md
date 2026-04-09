@@ -1,7 +1,3 @@
-Here is a clean and professional version of your README that you can directly copy and paste:
-
----
-
 # LedgerLogic – Personal Finance CLI Application
 
 LedgerLogic is a command-line based personal finance application designed to manage and analyze daily expenses efficiently. The project integrates core concepts from both C and C++ to handle large volumes of transaction data while maintaining performance and simplicity.
