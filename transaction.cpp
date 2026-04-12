@@ -1,75 +1,119 @@
-#include <iostream>
-#include <cstring>
 #include "transaction.h"
+#include <iostream>
+#include <iomanip>
+#include <sstream>
+#include <stdexcept>
+#include <algorithm>
 
-using namespace std;
+// ─── Transaction ────────────────────────────────────────────────────────────
 
-// DMA variables
-static Transaction* transactions = nullptr;
-static int capacity = 2;
-static int size = 0;
+Transaction::Transaction(int id, const std::string& date,
+                         const std::string& category, double amount)
+    : id(id), date(date), category(category), amount(amount) {}
 
-// STL containers
-static vector<Transaction> transactionList;
-static set<string> categories;
+Transaction::Transaction(Transaction&& other) noexcept
+    : id(other.id),
+      date(std::move(other.date)),
+      category(std::move(other.category)),
+      amount(other.amount) {
+    other.id = 0;
+    other.amount = 0.0;
+}
 
-// Expand dynamic array
-void expandArray() {
-    capacity *= 2;
-    Transaction* newArr = new Transaction[capacity];
-
-    for (int i = 0; i < size; i++) {
-        newArr[i] = transactions[i];
+Transaction& Transaction::operator=(Transaction&& other) noexcept {
+    if (this != &other) {
+        id       = other.id;
+        date     = std::move(other.date);
+        category = std::move(other.category);
+        amount   = other.amount;
+        other.id = 0;
+        other.amount = 0.0;
     }
-
-    delete[] transactions;
-    transactions = newArr;
+    return *this;
 }
 
-// Add transaction
-void addTransaction(const Transaction& t) {
-    if (size == capacity) {
-        expandArray();
+void Transaction::display() const {
+    std::cout << std::left
+              << std::setw(6)  << id
+              << std::setw(14) << date
+              << std::setw(18) << category
+              << std::fixed << std::setprecision(2) << amount
+              << "\n";
+}
+
+std::string Transaction::getSummary() const {
+    std::ostringstream oss;
+    oss << "ID:" << id << " [" << date << "] "
+        << category << " - Rs." << std::fixed << std::setprecision(2) << amount;
+    return oss.str();
+}
+
+// ─── TransactionManager ─────────────────────────────────────────────────────
+
+TransactionManager::TransactionManager() : nextId(1) {}
+
+void TransactionManager::addTransaction(const std::string& date,
+                                        const std::string& category,
+                                        double amount) {
+    if (category.empty())
+        throw std::invalid_argument("Category cannot be empty.");
+    if (amount <= 0.0)
+        throw std::invalid_argument("Amount must be positive.");
+
+    transactions.emplace_back(nextId++, date, category, amount);
+    categories.insert(category);
+}
+
+bool TransactionManager::deleteTransaction(int id) {
+    auto it = std::find_if(transactions.begin(), transactions.end(),
+                           [id](const Transaction& t) { return t.id == id; });
+    if (it == transactions.end()) return false;
+
+    transactions.erase(it);
+
+    // Rebuild category set
+    categories.clear();
+    for (const auto& t : transactions) categories.insert(t.category);
+    return true;
+}
+
+void TransactionManager::viewAll() const {
+    if (transactions.empty()) {
+        std::cout << "  No transactions recorded yet.\n";
+        return;
     }
-
-    transactions[size++] = t;
-    transactionList.push_back(t);
-    categories.insert(t.category);
+    std::cout << std::left
+              << std::setw(6)  << "ID"
+              << std::setw(14) << "Date"
+              << std::setw(18) << "Category"
+              << "Amount (Rs.)\n";
+    std::cout << std::string(52, '-') << "\n";
+    for (const auto& t : transactions) t.display();
 }
 
-// Used when loading from file
-void addTransactionFromFile(int id, const char* date, const char* category, float amount) {
-    Transaction t;
-    t.id = id;
-    strcpy(t.date, date);
-    strcpy(t.category, category);
-    t.amount = amount;
-
-    addTransaction(t);
-}
-
-// Delete transaction
-void deleteTransaction(int id) {
-    for (int i = 0; i < size; i++) {
-        if (transactions[i].id == id) {
-            for (int j = i; j < size - 1; j++) {
-                transactions[j] = transactions[j + 1];
-            }
-            size--;
-            break;
-        }
+std::vector<Transaction>
+TransactionManager::searchByCategory(const std::string& category) const {
+    std::vector<Transaction> result;
+    for (const auto& t : transactions) {
+        if (t.category == category) result.push_back(t);
     }
+    return result;
 }
 
-// Get all transactions
-Transaction* getAllTransactions() {
+const std::vector<Transaction>& TransactionManager::getAll() const {
     return transactions;
 }
 
-int getTransactionCount() {
-    return size;
+const std::set<std::string>& TransactionManager::getCategories() const {
+    return categories;
 }
 
-set<string> getCategories() {
-    return categories;
+void TransactionManager::setTransactions(std::vector<Transaction>&& txns) {
+    transactions = std::move(txns);
+    categories.clear();
+    nextId = 1;
+    for (const auto& t : transactions) {
+        categories.insert(t.category);
+        if (t.id >= nextId) nextId = t.id + 1;
+    }
 }
