@@ -1,84 +1,187 @@
-#include <iostream>
-#include <stdexcept>
-#include <cstring>
-
 #include "transaction.h"
-#include "file_handler.h"
 #include "report.h"
+#include "utils.h"
+#include "file_handler.h"
 
-using namespace std;
+#include <iostream>
+#include <vector>
+#include <cstring>
+#include <iomanip>
+#include <stdexcept>
 
-void addExpense() {
-    Transaction t;
+// ─── Persistence helpers ─────────────────────────────────────────────────────
 
-    cout << "Enter ID: ";
-    cin >> t.id;
+static void loadFromFile(TransactionManager& mgr) {
+    RawTransaction* raw = nullptr;
+    int count = load_transactions(&raw);
+    if (count <= 0) { free_raw_transactions(raw); return; }
 
-    cout << "Enter Date: ";
-    cin >> t.date;
-
-    cout << "Enter Category: ";
-    cin >> t.category;
-
-    cout << "Enter Amount: ";
-    cin >> t.amount;
-
-    if (t.amount < 0) {
-        throw invalid_argument("Negative expense!");
-    }
-
-    addTransaction(t);
-    appendTransactionToFile(&t);
-
-    cout << "Added successfully.\n";
-}
-
-void viewAll() {
-    Transaction* list = getAllTransactions();
-    int count = getTransactionCount();
-
+    std::vector<Transaction> txns;
+    txns.reserve(count);
     for (int i = 0; i < count; i++) {
-        cout << list[i].id << " "
-             << list[i].date << " "
-             << list[i].category << " "
-             << list[i].amount << endl;
+        txns.emplace_back(raw[i].id, raw[i].date, raw[i].category, raw[i].amount);
+    }
+    free_raw_transactions(raw);
+    mgr.setTransactions(std::move(txns));
+}
+
+static void saveToFile(const TransactionManager& mgr) {
+    const auto& txns = mgr.getAll();
+    int count = static_cast<int>(txns.size());
+
+    // Use DMA to build the C array
+    RawTransaction* raw = new RawTransaction[count == 0 ? 1 : count];
+    for (int i = 0; i < count; i++) {
+        raw[i].id     = txns[i].id;
+        raw[i].amount = txns[i].amount;
+        std::strncpy(raw[i].date,     txns[i].date.c_str(),     MAX_DATE_LEN - 1);
+        std::strncpy(raw[i].category, txns[i].category.c_str(), MAX_CATEGORY_LEN - 1);
+        raw[i].date[MAX_DATE_LEN - 1]         = '\0';
+        raw[i].category[MAX_CATEGORY_LEN - 1] = '\0';
+    }
+
+    if (save_transactions(raw, count) != 0) {
+        std::cerr << "  [!] Warning: failed to save data to " << LEDGER_FILE << "\n";
+    }
+    delete[] raw;
+}
+
+// ─── Menu actions ─────────────────────────────────────────────────────────────
+
+static void addExpense(TransactionManager& mgr) {
+    Utils::printHeader("Add Expense");
+
+    std::string date = Utils::readNonEmptyString("  Date (YYYY-MM-DD) [leave blank for today]: ");
+    if (date.empty() || date == " ") date = Utils::currentDate();
+
+    // Re-read if the user just pressed Enter (blank)
+    if (!Utils::isValidDate(date)) {
+        // Offer today as fallback
+        std::cout << "  [!] Invalid date format. Using today's date: "
+                  << Utils::currentDate() << "\n";
+        date = Utils::currentDate();
+    }
+
+    std::string category = Utils::readNonEmptyString("  Category (e.g. Food, Travel): ");
+    double amount        = Utils::readPositiveDouble("  Amount (Rs.): ");
+
+    try {
+        mgr.addTransaction(date, category, amount);
+        std::cout << "  [✓] Transaction added successfully.\n";
+    } catch (const std::exception& e) {
+        std::cout << "  [!] Error: " << e.what() << "\n";
     }
 }
 
-void generateReport() {
-    int choice;
-    cout << "1. Monthly\n2. Category\nChoice: ";
-    cin >> choice;
-
-    Report* r = nullptr;
-
-    if (choice == 1) r = new MonthlyReport();
-    else r = new CategoryReport();
-
-    r->generate();
-    delete r;
+static void viewAll(const TransactionManager& mgr) {
+    Utils::printHeader("All Transactions");
+    mgr.viewAll();
 }
+
+static void deleteExpense(TransactionManager& mgr) {
+    Utils::printHeader("Delete Transaction");
+    mgr.viewAll();
+    if (mgr.getAll().empty()) return;
+
+    int id = Utils::readPositiveInt("\n  Enter Transaction ID to delete: ");
+    if (mgr.deleteTransaction(id)) {
+        std::cout << "  [✓] Transaction #" << id << " deleted.\n";
+    } else {
+        std::cout << "  [!] No transaction found with ID " << id << ".\n";
+    }
+}
+
+static void searchByCategory(const TransactionManager& mgr) {
+    Utils::printHeader("Search by Category");
+
+    const auto& cats = mgr.getCategories();
+    if (cats.empty()) {
+        std::cout << "  No categories recorded yet.\n";
+        return;
+    }
+
+    std::cout << "  Available categories: ";
+    bool first = true;
+    for (const auto& c : cats) {
+        if (!first) std::cout << ", ";
+        std::cout << c;
+        first = false;
+    }
+    std::cout << "\n\n";
+
+    std::string cat = Utils::readNonEmptyString("  Enter category: ");
+    auto results    = mgr.searchByCategory(cat);
+
+    if (results.empty()) {
+        std::cout << "  No transactions found for category: " << cat << "\n";
+        return;
+    }
+
+    std::cout << "\n  Results for \"" << cat << "\":\n";
+    std::cout << std::string(52, '-') << "\n";
+    double total = 0.0;
+    for (const auto& t : results) { t.display(); total += t.amount; }
+    std::cout << std::string(52, '-') << "\n";
+    std::cout << "  Total: Rs." << std::fixed
+              << std::setprecision(2) << total << "\n";
+}
+
+static void generateReport(const TransactionManager& mgr) {
+    Utils::printHeader("Generate Report");
+
+    std::cout << "  1. Monthly Report\n";
+    std::cout << "  2. Category Report\n";
+    std::cout << "  3. Both\n";
+    std::string choice = Utils::readNonEmptyString("\n  Select [1-3]: ");
+
+    ReportSystem rs;
+    const auto&  all = mgr.getAll();
+
+    if (choice == "1" || choice == "3") rs.printMonthly(all);
+    if (choice == "2" || choice == "3") rs.printCategory(all);
+    if (choice != "1" && choice != "2" && choice != "3")
+        std::cout << "  [!] Invalid choice.\n";
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 int main() {
-    loadFromFile();
+    TransactionManager mgr;
 
-    int choice;
+    // Load persisted data
+    loadFromFile(mgr);
 
-    while (true) {
-        cout << "\n1.Add 2.View 3.Report 4.Exit\n";
-        cin >> choice;
+    bool running = true;
+    while (running) {
+        Utils::printHeader("LedgerLogic – Personal Finance Manager");
+
+        std::cout << "  1. Add Expense\n";
+        std::cout << "  2. View All Transactions\n";
+        std::cout << "  3. Delete Transaction\n";
+        std::cout << "  4. Search by Category\n";
+        std::cout << "  5. Generate Report\n";
+        std::cout << "  6. Exit\n\n";
+
+        std::string choice = Utils::readNonEmptyString("  Select option [1-6]: ");
 
         try {
-            switch (choice) {
-                case 1: addExpense(); break;
-                case 2: viewAll(); break;
-                case 3: generateReport(); break;
-                case 4:
-                    saveToFile();
-                    return 0;
-            }
-        } catch (exception& e) {
-            cout << e.what() << endl;
+            if      (choice == "1") addExpense(mgr);
+            else if (choice == "2") viewAll(mgr);
+            else if (choice == "3") deleteExpense(mgr);
+            else if (choice == "4") searchByCategory(mgr);
+            else if (choice == "5") generateReport(mgr);
+            else if (choice == "6") { running = false; continue; }
+            else std::cout << "  [!] Invalid option. Choose 1-6.\n";
+        } catch (const std::exception& e) {
+            std::cout << "  [!] Unexpected error: " << e.what() << "\n";
         }
+
+        // Save after every mutating operation
+        if (choice == "1" || choice == "3") saveToFile(mgr);
+
+        Utils::pausePrompt();
     }
+
+    std::cout << "\n  Goodbye! Your data has been saved to " << LEDGER_FILE << ".\n\n";
+    return 0;
 }
