@@ -8,21 +8,20 @@
 #include <cstring>
 #include <iomanip>
 #include <stdexcept>
-
-// ─── Persistence helpers ─────────────────────────────────────────────────────
+using namespace std;
 
 static void loadFromFile(TransactionManager& mgr) {
     RawTransaction* raw = nullptr;
     int count = load_transactions(&raw);
     if (count <= 0) { free_raw_transactions(raw); return; }
 
-    std::vector<Transaction> txns;
+   vector<Transaction> txns;
     txns.reserve(count);
     for (int i = 0; i < count; i++) {
         txns.emplace_back(raw[i].id, raw[i].date, raw[i].category, raw[i].amount);
     }
     free_raw_transactions(raw);
-    mgr.setTransactions(std::move(txns));
+    mgr.setTransactions(move(txns));
 }
 
 static void saveToFile(const TransactionManager& mgr) {
@@ -34,14 +33,14 @@ static void saveToFile(const TransactionManager& mgr) {
     for (int i = 0; i < count; i++) {
         raw[i].id     = txns[i].id;
         raw[i].amount = txns[i].amount;
-        std::strncpy(raw[i].date,     txns[i].date.c_str(),     MAX_DATE_LEN - 1);
-        std::strncpy(raw[i].category, txns[i].category.c_str(), MAX_CATEGORY_LEN - 1);
+        strncpy(raw[i].date,     txns[i].date.c_str(),     MAX_DATE_LEN - 1);
+        strncpy(raw[i].category, txns[i].category.c_str(), MAX_CATEGORY_LEN - 1);
         raw[i].date[MAX_DATE_LEN - 1]         = '\0';
         raw[i].category[MAX_CATEGORY_LEN - 1] = '\0';
     }
 
     if (save_transactions(raw, count) != 0) {
-        std::cerr << "  [!] Warning: failed to save data to " << LEDGER_FILE << "\n";
+        cerr << "  [!] Warning: failed to save data to " << LEDGER_FILE << "\n";
     }
     delete[] raw;
 }
@@ -51,25 +50,25 @@ static void saveToFile(const TransactionManager& mgr) {
 static void addExpense(TransactionManager& mgr) {
     Utils::printHeader("Add Expense");
 
-    std::string date = Utils::readNonEmptyString("  Date (YYYY-MM-DD) [leave blank for today]: ");
+    string date = Utils::readNonEmptyString("  Date (YYYY-MM-DD) [leave blank for today]: ");
     if (date.empty() || date == " ") date = Utils::currentDate();
 
     // Re-read if the user just pressed Enter (blank)
     if (!Utils::isValidDate(date)) {
         // Offer today as fallback
-        std::cout << "  [!] Invalid date format. Using today's date: "
+        cout << "  [!] Invalid date format. Using today's date: "
                   << Utils::currentDate() << "\n";
         date = Utils::currentDate();
     }
 
-    std::string category = Utils::readNonEmptyString("  Category (e.g. Food, Travel): ");
+    string category = Utils::readNonEmptyString("  Category (e.g. Food, Travel): ");
     double amount        = Utils::readPositiveDouble("  Amount (Rs.): ");
 
     try {
         mgr.addTransaction(date, category, amount);
-        std::cout << "  [✓] Transaction added successfully.\n";
-    } catch (const std::exception& e) {
-        std::cout << "  [!] Error: " << e.what() << "\n";
+        cout << "  [✓] Transaction added successfully.\n";
+    } catch (const exception& e) {
+        cout << "  [!] Error: " << e.what() << "\n";
     }
 }
 
@@ -85,9 +84,9 @@ static void deleteExpense(TransactionManager& mgr) {
 
     int id = Utils::readPositiveInt("\n  Enter Transaction ID to delete: ");
     if (mgr.deleteTransaction(id)) {
-        std::cout << "  [✓] Transaction #" << id << " deleted.\n";
+        cout << "  [✓] Transaction #" << id << " deleted.\n";
     } else {
-        std::cout << "  [!] No transaction found with ID " << id << ".\n";
+        cout << "  [!] No transaction found with ID " << id << ".\n";
     }
 }
 
@@ -96,43 +95,43 @@ static void searchByCategory(const TransactionManager& mgr) {
 
     const auto& cats = mgr.getCategories();
     if (cats.empty()) {
-        std::cout << "  No categories recorded yet.\n";
+       cout << "  No categories recorded yet.\n";
         return;
     }
 
-    std::cout << "  Available categories: ";
+    cout << "  Available categories: ";
     bool first = true;
     for (const auto& c : cats) {
-        if (!first) std::cout << ", ";
-        std::cout << c;
+        if (!first) cout << ", ";
+        cout << c;
         first = false;
     }
-    std::cout << "\n\n";
+    cout << "\n\n";
 
-    std::string cat = Utils::readNonEmptyString("  Enter category: ");
+    string cat = Utils::readNonEmptyString("  Enter category: ");
     auto results    = mgr.searchByCategory(cat);
 
     if (results.empty()) {
-        std::cout << "  No transactions found for category: " << cat << "\n";
+        cout << "  No transactions found for category: " << cat << "\n";
         return;
     }
 
-    std::cout << "\n  Results for \"" << cat << "\":\n";
-    std::cout << std::string(52, '-') << "\n";
+   cout << "\n  Results for \"" << cat << "\":\n";
+    cout << string(52, '-') << "\n";
     double total = 0.0;
     for (const auto& t : results) { t.display(); total += t.amount; }
-    std::cout << std::string(52, '-') << "\n";
-    std::cout << "  Total: Rs." << std::fixed
-              << std::setprecision(2) << total << "\n";
+    cout << string(52, '-') << "\n";
+    cout << "  Total: Rs." << fixed
+              << setprecision(2) << total << "\n";
 }
 
 static void generateReport(const TransactionManager& mgr) {
     Utils::printHeader("Generate Report");
 
-    std::cout << "  1. Monthly Report\n";
-    std::cout << "  2. Category Report\n";
-    std::cout << "  3. Both\n";
-    std::string choice = Utils::readNonEmptyString("\n  Select [1-3]: ");
+    cout << "  1. Monthly Report\n";
+    cout << "  2. Category Report\n";
+    cout << "  3. Both\n";
+    string choice = Utils::readNonEmptyString("\n  Select [1-3]: ");
 
     ReportSystem rs;
     const auto&  all = mgr.getAll();
@@ -140,7 +139,7 @@ static void generateReport(const TransactionManager& mgr) {
     if (choice == "1" || choice == "3") rs.printMonthly(all);
     if (choice == "2" || choice == "3") rs.printCategory(all);
     if (choice != "1" && choice != "2" && choice != "3")
-        std::cout << "  [!] Invalid choice.\n";
+        cout << "  [!] Invalid choice.\n";
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -155,14 +154,14 @@ int main() {
     while (running) {
         Utils::printHeader("LedgerLogic – Personal Finance Manager");
 
-        std::cout << "  1. Add Expense\n";
-        std::cout << "  2. View All Transactions\n";
-        std::cout << "  3. Delete Transaction\n";
-        std::cout << "  4. Search by Category\n";
-        std::cout << "  5. Generate Report\n";
-        std::cout << "  6. Exit\n\n";
+        cout << "  1. Add Expense\n";
+        cout << "  2. View All Transactions\n";
+        cout << "  3. Delete Transaction\n";
+        cout << "  4. Search by Category\n";
+        cout << "  5. Generate Report\n";
+        cout << "  6. Exit\n\n";
 
-        std::string choice = Utils::readNonEmptyString("  Select option [1-6]: ");
+        string choice = Utils::readNonEmptyString("  Select option [1-6]: ");
 
         try {
             if      (choice == "1") addExpense(mgr);
@@ -171,9 +170,9 @@ int main() {
             else if (choice == "4") searchByCategory(mgr);
             else if (choice == "5") generateReport(mgr);
             else if (choice == "6") { running = false; continue; }
-            else std::cout << "  [!] Invalid option. Choose 1-6.\n";
-        } catch (const std::exception& e) {
-            std::cout << "  [!] Unexpected error: " << e.what() << "\n";
+            else cout << "  [!] Invalid option. Choose 1-6.\n";
+        } catch (const exception& e) {
+            cout << "  [!] Unexpected error: " << e.what() << "\n";
         }
 
         // Save after every mutating operation
@@ -182,6 +181,6 @@ int main() {
         Utils::pausePrompt();
     }
 
-    std::cout << "\n  Goodbye! Your data has been saved to " << LEDGER_FILE << ".\n\n";
+    cout << "\n  Goodbye! Your data has been saved to " << LEDGER_FILE << ".\n\n";
     return 0;
 }
