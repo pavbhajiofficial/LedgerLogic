@@ -7,73 +7,75 @@
 #include <algorithm>
 #include <cctype>
 
+using namespace std;
+
 namespace Utils {
 
-std::string currentDate() {
-    std::time_t t = std::time(nullptr);
-    std::tm*    tm_ptr = std::localtime(&t);
+string currentDate() {
+    time_t t = time(nullptr);
+    tm*    tm_ptr = localtime(&t);
     char buf[16];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d", tm_ptr);
-    return std::string(buf);
+    strftime(buf, sizeof(buf), "%Y-%m-%d", tm_ptr);
+    return string(buf);
 }
 
-std::string trim(const std::string& s) {
+string trim(const string& s) {
     size_t start = s.find_first_not_of(" \t\r\n");
-    if (start == std::string::npos) return "";
+    if (start == string::npos) return "";
     size_t end = s.find_last_not_of(" \t\r\n");
     return s.substr(start, end - start + 1);
 }
 
-bool isValidDate(const std::string& date) {
+bool isValidDate(const string& date) {
     // Expects YYYY-MM-DD
     if (date.size() != 10) return false;
     if (date[4] != '-' || date[7] != '-') return false;
     for (int i : {0,1,2,3,5,6,8,9}) {
-        if (!std::isdigit((unsigned char)date[i])) return false;
+        if (!isdigit((unsigned char)date[i])) return false;
     }
-    int month = std::stoi(date.substr(5, 2));
-    int day   = std::stoi(date.substr(8, 2));
+    int month = stoi(date.substr(5, 2));
+    int day   = stoi(date.substr(8, 2));
     return month >= 1 && month <= 12 && day >= 1 && day <= 31;
 }
 
-double readPositiveDouble(const std::string& prompt) {
+double readPositiveDouble(const string& prompt) {
     while (true) {
-        std::cout << prompt;
-        std::string line;
-        std::getline(std::cin, line);
+        cout << prompt;
+        string line;
+        getline(cin, line);
         line = trim(line);
         try {
             size_t pos;
-            double val = std::stod(line, &pos);
+            double val = stod(line, &pos);
             if (pos == line.size() && val > 0.0) return val;
         } catch (...) {}
-        std::cout << "  [!] Invalid input. Enter a positive number.\n";
+        cout << "  [!] Invalid input. Enter a positive number.\n";
     }
 }
 
-int readPositiveInt(const std::string& prompt) {
+int readPositiveInt(const string& prompt) {
     while (true) {
-        std::cout << prompt;
-        std::string line;
-        std::getline(std::cin, line);
+        cout << prompt;
+        string line;
+        getline(cin, line);
         line = trim(line);
         try {
             size_t pos;
-            int val = std::stoi(line, &pos);
+            int val = stoi(line, &pos);
             if (pos == line.size() && val > 0) return val;
         } catch (...) {}
-        std::cout << "  [!] Invalid input. Enter a positive integer.\n";
+        cout << "  [!] Invalid input. Enter a positive integer.\n";
     }
 }
 
-std::string readNonEmptyString(const std::string& prompt) {
+string readNonEmptyString(const string& prompt) {
     while (true) {
-        std::cout << prompt;
-        std::string line;
-        std::getline(std::cin, line);
+        cout << prompt;
+        string line;
+        getline(cin, line);
         line = trim(line);
         if (!line.empty()) return line;
-        std::cout << "  [!] Input cannot be empty.\n";
+        cout << "  [!] Input cannot be empty.\n";
     }
 }
 
@@ -86,16 +88,16 @@ void clearScreen() {
 }
 
 void pausePrompt() {
-    std::cout << "\n  Press Enter to continue...";
-    std::string dummy;
-    std::getline(std::cin, dummy);
+    cout << "\n  Press Enter to continue...";
+    string dummy;
+    getline(cin, dummy);
 }
 
-void printHeader(const std::string& title) {
-    std::string border(title.size() + 6, '=');
-    std::cout << "\n  " << border << "\n";
-    std::cout << "     " << title << "\n";
-    std::cout << "  " << border << "\n\n";
+void printHeader(const string& title) {
+    string border(title.size() + 6, '=');
+    cout << "\n  " << border << "\n";
+    cout << "     " << title << "\n";
+    cout << "  " << border << "\n\n";
 }
 
 } // namespace Utils
